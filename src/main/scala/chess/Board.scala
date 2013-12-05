@@ -16,6 +16,8 @@ class Board extends Function[Position, Option[Piece]] {
 
   protected var pos2piece = HashMap[Position, Piece]()
   protected var piece2pos = HashMap[Piece, Set[Position]]()
+  /* check to see if non-pawn piece was moved (for castling) */
+  protected var pos2moved = HashMap[Position, Boolean]()
 
   def positions(piece: Piece) : Set[Position] = {
     piece2pos.get(piece) match {
@@ -25,6 +27,8 @@ class Board extends Function[Position, Option[Piece]] {
   }
 
   def apply(pos: Position) = pos2piece.get(pos)
+  
+  def moved(pos: Position) : Boolean = pos2moved.getOrElse(pos, false)
 
   /**
    * Find nearest piece from the given position on the given direction
@@ -92,7 +96,7 @@ class Board extends Function[Position, Option[Piece]] {
     val positionsToEscape = Directions.all.map((dir) => position.shift(dir))
       .filter((opt) =>
       opt match {
-        case Some(pos) => King.validate(this, Move(king, position, Option(pos)))
+        case Some(pos) => King.validate(this, Move(king, position, Option(pos), None, None))
         case _ => false
       })
 
@@ -117,7 +121,7 @@ class Board extends Function[Position, Option[Piece]] {
             attackingLine.map((dst) =>
               allPieces.count((p) => p match {
                 case (piece, piecePositions) =>
-                  piecePositions.count((src) => piece.validate(this, Move(piece, dst, Option(src)))) > 0
+                  piecePositions.count((src) => piece.validate(this, Move(piece, dst, Option(src), None, None))) > 0
                 case _ => false
               })).count((c) => c > 0) > 0
 
@@ -142,7 +146,7 @@ class Board extends Function[Position, Option[Piece]] {
       .filter((t) => t match { // only leave pieces that are able to attack the king
         case Some((piece, pos))
           if piece.color == color.complement &&
-             piece.validate(this, Move(piece, position, Option(pos)))=>
+             piece.validate(this, Move(piece, position, Option(pos), None, None))=>
           true
         case _ => false
       })
@@ -183,6 +187,7 @@ object Board extends Board {
 
     piece2pos.clear()
     pos2piece.clear()
+    pos2moved.clear()
 
     List(White, Black).foreach((color) => {
       piecesRank(color).foreach((t) => {
@@ -205,7 +210,8 @@ object Board extends Board {
 
     piece2pos += (piece -> (set - pos))
     pos2piece.remove(pos)
-
+    pos2moved.put(pos, true)
+    
     piece
   }
 
@@ -241,6 +247,11 @@ object Board extends Board {
       true
     } else false
   }
+  
+  def moveCastledRook(move: Move) = move.castle match {
+    case Some(cstl) => addTo(cstl.rookDst, removeAt(cstl.rookSrc))
+    case _ => 
+  }
 
   /**
    * Moves piece to the specified location
@@ -260,13 +271,16 @@ object Board extends Board {
 
             if (lastMoveCausesCheck(move, None))
               (this, MoveCausesCheck(move))
-            else if (inCheckPosition(move.piece.color.complement))
-              if (inMatePosition(move.piece.color.complement))
-                (this, CheckMate(move))
+            else {
+              moveCastledRook(move)
+              if (inCheckPosition(move.piece.color.complement))
+                if (inMatePosition(move.piece.color.complement))
+                  (this, CheckMate(move))
+                else
+                  (this, Check(move))
               else
-                (this, Check(move))
-            else
-              (this, Moved(move))
+                (this, Moved(move))
+            }
 
           case Some(piece) if piece.color != sourcePiece.color =>
             val captured = removeAt(move.dst)

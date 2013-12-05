@@ -11,6 +11,7 @@ trait Parser {
 
 object Commands {
   val parsers = List[Parser](
+    CastleMoveCommand,
     MoveCommand,
     BoardCommand,
     HelpCommand,
