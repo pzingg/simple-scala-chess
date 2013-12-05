@@ -79,6 +79,19 @@ class Board extends Function[Position, Option[Piece]] {
     inCheckPosition(color, pos)
   }
 
+  def blockingPieces(color: Color, allPieces: Set[(Piece, Set[Position])], dst: Position) = {
+    allPieces.count((p) => p match {
+      case (piece, piecePositions) =>
+        piecePositions.count((src) => piece.validate(this, Move(piece, dst, Option(src), None, None))) > 0
+      case _ => false
+    })
+  }  
+  
+  def canBlock(color: Color, allPieces: Set[(Piece, Set[Position])], attackingLine: PositionIterator) = {
+    val blocksOnLine = attackingLine.map((dst) => blockingPieces(color, allPieces, dst)).count((c) => c > 0)
+    blocksOnLine > 0
+  }
+
   /**
    * Tests whether the king is able to escape from check.
    * Player can:
@@ -102,9 +115,6 @@ class Board extends Function[Position, Option[Piece]] {
 
     if (positionsToEscape.count((pos) => !inCheckPosition(king.color, pos.get)) == 0) {
       // Cannot escape to anywhere - try to move pieces onto attacking lines
-      val allPieces =
-        Set(Piece(Pawn, color), Piece(Rook, color), Piece(Knight, color), Piece(Bishop, color), Piece(Queen, color))
-          .map((piece) => (piece, piece2pos.get(piece).get))
 
       /*
        * The algorithm:
@@ -114,20 +124,19 @@ class Board extends Function[Position, Option[Piece]] {
        *    - count number of pieces that could be moved to this position
        *    - return true if count is > 0
        */
-      kingAttackingFoes(king.color, position).flatten.map(
+      val allPieces =
+        Set(Piece(Pawn, color), Piece(Rook, color), Piece(Knight, color), Piece(Bishop, color), Piece(Queen, color))
+        .map((piece) => (piece, piece2pos.get(piece).get))
+
+      val blockedLines = kingAttackingFoes(king.color, position).flatten.map(
         (pair) => pair match { // Test whether attack on this line could be blocked by piece moving
         case (piece, pos) => position.traverse(pos) match {
-          case Some(attackingLine) =>
-            attackingLine.map((dst) =>
-              allPieces.count((p) => p match {
-                case (piece, piecePositions) =>
-                  piecePositions.count((src) => piece.validate(this, Move(piece, dst, Option(src), None, None))) > 0
-                case _ => false
-              })).count((c) => c > 0) > 0
-
+          case Some(attackingLine) => canBlock(color, allPieces, attackingLine)
           case _ => false
         }
-      }).reduceLeft(_&&_) == true // should escape all the attacking lines
+      })
+      val allAttacksBlocked = blockedLines.reduceLeft(_&&_)
+      !allAttacksBlocked // should escape all the attacking lines
     } else {
       false // king can escape attack
     }
@@ -270,6 +279,21 @@ object Board extends Board {
     case Some(cstl) => Some(addTo(cstl.rookDst, removeAt(cstl.rookSrc)))
     case _ => None
   }
+  
+  def validMove(move: Move, captured: Option[Piece]) = {
+    val promotedPiece = promote(move)
+  
+    if (inCheckPosition(move.piece.color.complement))
+      if (inMatePosition(move.piece.color.complement))
+        (this, CheckMate(move, promotedPiece))
+      else
+        (this, Check(move, promotedPiece))
+    else
+      captured match {
+        case Some(piece) => (this, Captured(piece, move, promotedPiece))
+        case None => (this, Moved(move, promotedPiece))
+      }
+  }
 
   /**
    * Moves piece to the specified location
@@ -291,15 +315,7 @@ object Board extends Board {
               (this, MoveCausesCheck(move))
             else {
               castledRook(move)
-              val promotedPiece = promote(move)
-              
-              if (inCheckPosition(move.piece.color.complement))
-                if (inMatePosition(move.piece.color.complement))
-                  (this, CheckMate(move, promotedPiece))
-                else
-                  (this, Check(move, promotedPiece))
-              else
-                (this, Moved(move, promotedPiece))
+              validMove(move, None)
             }
 
           case Some(piece) if piece.color != sourcePiece.color =>
@@ -310,7 +326,7 @@ object Board extends Board {
             if (lastMoveCausesCheck(move, Option(captured)))
               (this, MoveCausesCheck(move))
             else
-              (this, Captured(captured, move, promote(move)))
+              validMove(move, Option(captured))
 
           case _ => (this, InvalidMove(move))
         }
