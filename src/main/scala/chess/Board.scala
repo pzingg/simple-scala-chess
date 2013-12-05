@@ -127,7 +127,7 @@ class Board extends Function[Position, Option[Piece]] {
 
           case _ => false
         }
-      }).reduceLeft(_&&_) == true// should escape all the attacking lines
+      }).reduceLeft(_&&_) == true // should escape all the attacking lines
     } else {
       false // king can escape attack
     }
@@ -146,7 +146,7 @@ class Board extends Function[Position, Option[Piece]] {
       .filter((t) => t match { // only leave pieces that are able to attack the king
         case Some((piece, pos))
           if piece.color == color.complement &&
-             piece.validate(this, Move(piece, position, Option(pos), None, None))=>
+             piece.validate(this, Move(piece, position, Option(pos), None, None)) =>
           true
         case _ => false
       })
@@ -221,11 +221,13 @@ object Board extends Board {
    * @param pos
    * @param piece
    */
-  def addTo(pos: Position, piece: Piece) {
+  def addTo(pos: Position, piece: Piece) : Piece = {
     val set = positions(piece)
 
     piece2pos += (piece -> (set + pos))
     pos2piece += (pos -> piece)
+    
+    piece
   }
 
   /**
@@ -248,9 +250,25 @@ object Board extends Board {
     } else false
   }
   
-  def moveCastledRook(move: Move) = move.castle match {
-    case Some(cstl) => addTo(cstl.rookDst, removeAt(cstl.rookSrc))
-    case _ => 
+  def promotedPawn(move: Move) : Piece = {
+    val promotedType = PieceType(move.promotion.getOrElse('Q').toString)
+    val pawn = removeAt(move.dst)
+    val promotedPiece = Piece(promotedType, pawn.color)
+    addTo(move.dst, promotedPiece)
+    promotedPiece
+  }
+  
+  def promote(move: Move) : Option[Piece] = {
+    (move.piece.pieceType, move.piece.color, move.dst.rank) match {
+      case (Pawn, White, 8) => Some(promotedPawn(move))
+      case (Pawn, Black, 1) => Some(promotedPawn(move))
+      case (_, _, _) => None
+    }
+  }
+  
+  def castledRook(move: Move) : Option[Piece] = move.castle match {
+    case Some(cstl) => Some(addTo(cstl.rookDst, removeAt(cstl.rookSrc)))
+    case _ => None
   }
 
   /**
@@ -272,14 +290,16 @@ object Board extends Board {
             if (lastMoveCausesCheck(move, None))
               (this, MoveCausesCheck(move))
             else {
-              moveCastledRook(move)
+              castledRook(move)
+              val promotedPiece = promote(move)
+              
               if (inCheckPosition(move.piece.color.complement))
                 if (inMatePosition(move.piece.color.complement))
-                  (this, CheckMate(move))
+                  (this, CheckMate(move, promotedPiece))
                 else
-                  (this, Check(move))
+                  (this, Check(move, promotedPiece))
               else
-                (this, Moved(move))
+                (this, Moved(move, promotedPiece))
             }
 
           case Some(piece) if piece.color != sourcePiece.color =>
@@ -290,7 +310,7 @@ object Board extends Board {
             if (lastMoveCausesCheck(move, Option(captured)))
               (this, MoveCausesCheck(move))
             else
-              (this, Captured(captured, move))
+              (this, Captured(captured, move, promote(move)))
 
           case _ => (this, InvalidMove(move))
         }

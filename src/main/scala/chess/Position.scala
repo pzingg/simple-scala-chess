@@ -38,7 +38,7 @@ case class Position(file : Char, rank : Int) {
 
     (c1._1 - c2._1, c1._2 - c2._2)
   }
-
+  
   def shift(diff: (Int, Int)) : Option[Position] =
     Position((coord._1 + diff._1, coord._2 + diff._2))
 

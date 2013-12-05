@@ -24,14 +24,14 @@ object Repl extends App {
             loop(board, color)
           }
 
-          case Moved(_) | Captured(_,_) | Check(_) => {
+          case Moved(_,_) | Captured(_,_,_) | Check(_,_) => {
             println(result)
 
             updatedBoard.print()
             loop(updatedBoard, comp(color))
           }
 
-          case CheckMate(_) => {
+          case CheckMate(_,_) => {
             updatedBoard.print()
 
             println(result)

@@ -17,9 +17,11 @@ case object Pawn extends PieceType {
       case Black => Board.vertical.end - 1
     }
 
+    // TODO: ignore or enforce promotion in move
     move.dst.diff(src) match {
       // Pawn regular movement rule
-      case (0, y) if y == offset => board(move.dst).isEmpty
+      case (0, y) if y == offset => 
+        board(move.dst).isEmpty
 
       // Pawn capture rule
       case (x, y) if Math.abs(x) == 1 && y == offset =>

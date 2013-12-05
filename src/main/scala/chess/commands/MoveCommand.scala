@@ -28,17 +28,17 @@ object CastleMoveCommand extends Parser {
  */
 
 object MoveCommand extends Parser {
-  val pattern = """^(?i)([PRNBQK])?([A-H][1-8])?([A-H][1-8])(=[RNBQ]?)?"""
+  val pattern = """^(?i)([PRNBQK])?([A-H][1-8])?([A-H][1-8])(([=])([RNBQ]?))?"""
 
   def matches(expr : String) = expr.matches(pattern)
 
   def parse(expr: String, color: Color) = {
     val matcher = pattern.r
-    val matcher(p, s, d, pr) = expr
-    val promotion: Option[Char] = pr match {
-      case "=" => Some('Q')
-      case x if x.startsWith("=") => Some(x(1).toUpper)
-      case _ => None
+    val matcher(p, s, d, prt, pr, pt) = expr
+    val promotion: Option[Char] = (pr, pt) match {
+      case ("=", "") => Some('Q')
+      case ("=", _) => Some(pt(0).toUpper)
+      case (_, _) => None
     }
 
     (PieceType(p), Position(s), Position(d)) match {
